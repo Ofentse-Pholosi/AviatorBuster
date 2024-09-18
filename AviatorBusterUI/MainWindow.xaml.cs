@@ -22,25 +22,27 @@ namespace AviatorBusterUI
             InitializeComponent();
             tracker = new AviatorDataTracker();
 
-            scatterChart.Series = new SeriesCollection
+            // LineSeries for game data (this will connect points with a trendline)
+            var gameDataLineSeries = new LineSeries
             {
-                new ScatterSeries
-                {
-                    Title = "Aviator Game Data",
-                    Values = new ChartValues<ScatterPoint>(),
-                    MinPointShapeDiameter = 10,
-                    MaxPointShapeDiameter = 15
-                },
-                                new LineSeries
-                {
-                    Title = "Trend Line",
-                    Values = new ChartValues<ObservablePoint>(), // LineSeries needs ObservablePoint for X, Y pairs
-                    PointGeometry = null, 
-                    StrokeThickness = 2
-                }
+                Title = "Aviator Game Data Trendline",
+                Values = new ChartValues<ObservablePoint>(),
+                LineSmoothness = 2, // Straight line connection
+                StrokeThickness = 2,
+                //PointGeometry = null // Hide points on the line series
             };
 
-            DataContext = this;
+            // ScatterSeries for predicted limit points
+            var predictedLimitScatterSeries = new ScatterSeries
+            {
+                Title = "Predicted Limit",
+                Values = new ChartValues<ScatterPoint>(),
+                MinPointShapeDiameter = 10,
+                MaxPointShapeDiameter = 15
+            };
+
+            // Add both series to the scatter chart
+            scatterChart.Series = new SeriesCollection { gameDataLineSeries, predictedLimitScatterSeries };
         }
 
         private void Input_KeyDown(object sender, KeyEventArgs e)
@@ -71,24 +73,26 @@ namespace AviatorBusterUI
                 // Clear the input TextBox
                 GameDataInput.Clear();
 
+                // Update the line series for game data (this will connect the points with a line)
+                var gameDataLineSeries = (LineSeries)scatterChart.Series[0];
+                gameDataLineSeries.Values.Add(new ObservablePoint(counter++, gameData));
+
                 // Check if a prediction can be made and display it
                 if (tracker.CanPredict())
                 {
+                    // Use the PredictLimit method to get the limit for trendline
+                    double predictedLimit = tracker.PredictLimit();
+
+                    // Update the scatter series for the predicted limit
+                    var predictedLimitScatterSeries = (ScatterSeries)scatterChart.Series[1];
+                    predictedLimitScatterSeries.Values.Add(new ScatterPoint(counter, predictedLimit));
+
                     PredictionOutput.Text = tracker.Predict();
                 }
                 else
                 {
                     PredictionOutput.Text = "Initiating 🔃";
                 }
-
-                var scatterSeries = (ScatterSeries)scatterChart.Series[0];
-
-                var lineSeries = (LineSeries)scatterChart.Series[1];
-                lineSeries.Values.Add(new ObservablePoint(counter, gameData)); // ObservablePoint is used for the line
-
-                // Add the X (gameData) and Y (calculated value) as ScatterPoint
-                scatterSeries.Values.Add(new ScatterPoint(counter++, gameData));
-
             }
             else
             {

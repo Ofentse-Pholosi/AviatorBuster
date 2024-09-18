@@ -12,6 +12,7 @@ namespace AviatorBusterUI
         private const int MaxCapacity = 50;
 
         // Define variables for the preset points
+        private const double defaultLimit = 1.0;
         private const double Min = 1.25;
         private const double Med1 = 1.5;
         private const double Med2 = 1.75;
@@ -20,6 +21,7 @@ namespace AviatorBusterUI
         // Counters for consecutive condition tracking
         private int flewPointGreaterThanMaxCounter = 0;
         private int flewPointLessThanMinCounter = 0;
+        private int flewPointLessThanMinOverMaxCounter = 0;
         private int flewPointLessThanMed1Counter = 0;
         private int flewPointLessThanMed2Counter = 0;
 
@@ -41,7 +43,11 @@ namespace AviatorBusterUI
         // Method to check if prediction can be made
         public bool CanPredict()
         {
-            return _historicalData.Count >= 5;
+            if( _historicalData.Count >= 5)
+            {
+                return true;
+            }
+            return false;
         }
 
         public void InitiatePredict()
@@ -64,10 +70,18 @@ namespace AviatorBusterUI
             {
                 flewPointGreaterThanMaxCounter++;
 
-                // Condition 2 + 3: If FlewPoint exceeds Max twice consecutively
-                if (flewPointGreaterThanMaxCounter >= 2)
+                if (flewPointGreaterThanMaxCounter < 2)
                 {
-                    if ((flewPoint > MAX) && (flewPoint < 3.5))
+                    // If FlewPoint exceeds Max once but with possibility of being much greater than MAX
+                    if (flewPoint > 10)
+                    {
+                        limit = defaultLimit.ToString() + "- Skip";
+                    }
+                }
+                else if (flewPointGreaterThanMaxCounter >= 2)
+                {
+                    // Condition 2 + 3: If FlewPoint exceeds Max twice consecutively
+                    if ((flewPoint > MAX) && (flewPoint < 4.5))
                     {
                         limit = "Limit: " + Med2;
                         flewPointGreaterThanMaxCounter = 0;
@@ -77,17 +91,11 @@ namespace AviatorBusterUI
                         limit = "Limit: " + Med1;
                         flewPointGreaterThanMaxCounter = 0;
                     }
-                } // If FlewPoint exceeds Max once
-                else if (flewPointGreaterThanMaxCounter < 2)
+                }
+                else
                 {
-                    if (flewPoint > 10)
-                    {
-                        limit = "Skip";
-                    }
-                    else
-                    {
-                        limit = "Limit: " + Min;
-                    }
+                    limit = "Limit: " + Min;
+
                 }
             }
             else
@@ -99,19 +107,21 @@ namespace AviatorBusterUI
             if (flewPoint < Min)
             {
                 flewPointLessThanMinCounter++;
-                if (flewPointLessThanMinCounter < 2)
+                flewPointLessThanMinOverMaxCounter++;
+
+                if (flewPointLessThanMinOverMaxCounter > 4)
                 {
-                    limit = "Limit: " + Med1;
+                    limit = "Limit: " + MAX;
+                    flewPointLessThanMinOverMaxCounter = 0;
                 }
                 else if (flewPointLessThanMinCounter >= 2)
                 {
                     limit = "Limit: " + Med1;
                     flewPointLessThanMinCounter = 0;
                 }
-                else if (flewPointLessThanMinCounter > 3)
+                else
                 {
-                    limit = "Limit: " + MAX;
-                    flewPointLessThanMinCounter = 0;
+                    limit = "Limit: " + Med1;
                 }
             }
             else
@@ -152,7 +162,112 @@ namespace AviatorBusterUI
             }
 
             // Return the final prediction or limit based on conditions
-            return string.IsNullOrEmpty(limit) ? "..." : limit;
+            return string.IsNullOrEmpty(limit) ? defaultLimit.ToString() : limit;
+        }
+
+        public double PredictLimit()
+        {
+            InitiatePredict();
+            double flewPoint = _historicalData.Last.Value;
+            double limit = 1;  // Default limit is set to 1
+
+            // Condition 1 & 2: If FlewPoint > Max
+            if (flewPoint > MAX)
+            {
+                flewPointGreaterThanMaxCounter++;
+
+                if (flewPointGreaterThanMaxCounter < 2)
+                {
+                    // If FlewPoint exceeds Max once but with possibility of being much greater than MAX
+                    if (flewPoint > 10)
+                    {
+                        return defaultLimit;
+                    }
+                }
+                else if (flewPointGreaterThanMaxCounter >= 2)
+                {
+                    // Condition 2 + 3: If FlewPoint exceeds Max twice consecutively
+                    if ((flewPoint > MAX) && (flewPoint < 4.5))
+                    {
+                        limit = Med2;
+                        flewPointGreaterThanMaxCounter = 0;
+                    }
+                    else
+                    {
+                        limit = Med1;
+                        flewPointGreaterThanMaxCounter = 0;
+                    }
+                }
+                else
+                {
+                    limit = Min;
+                }
+            }
+            else
+            {
+                flewPointGreaterThanMaxCounter = 0;
+            }
+
+            // Condition 4: If FlewPoint < Min twice consecutively
+            if (flewPoint < Min)
+            {
+                flewPointLessThanMinCounter++;
+                flewPointLessThanMinOverMaxCounter++;
+
+                if (flewPointLessThanMinOverMaxCounter > 4)
+                {
+                    limit = MAX;
+                    flewPointLessThanMinOverMaxCounter = 0;
+                }
+                else if (flewPointLessThanMinCounter >= 2)
+                {
+                    limit = Med1;
+                    flewPointLessThanMinCounter = 0; // Reset consecutive counter after two consecutive occurrences
+                }
+                else
+                {
+                    limit = Med1; // If it's less than Min but not yet twice consecutively
+                }
+            }
+            else
+            {
+                flewPointLessThanMinCounter = 0;
+            }
+
+            // Condition 5: If FlewPoint < Med1 twice consecutively
+            if (flewPoint < Med1)
+            {
+                flewPointLessThanMed1Counter++;
+
+                if (flewPointLessThanMed1Counter >= 2)
+                {
+                    limit = Med1;
+                    flewPointLessThanMed1Counter = 0;
+                }
+            }
+            else
+            {
+                flewPointLessThanMed1Counter = 0;
+            }
+
+            // Condition 6: If FlewPoint < Med2 twice consecutively
+            if (flewPoint < Med2)
+            {
+                flewPointLessThanMed2Counter++;
+
+                if (flewPointLessThanMed2Counter >= 2)
+                {
+                    limit = Min;
+                    flewPointLessThanMed2Counter = 0;
+                }
+            }
+            else
+            {
+                flewPointLessThanMed2Counter = 0;
+            }
+
+            // Return the final prediction or default limit of 1 if no conditions are met
+            return limit;
         }
     }
 }
